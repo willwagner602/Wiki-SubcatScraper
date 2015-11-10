@@ -55,21 +55,24 @@ def get_license_table(page):
     elif page.find_all('table', class_='layouttemplate licensetpl mw-content-ltr'):
         full_license = ' '.join(page.find('table', class_='layouttemplate licensetpl mw-content-ltr').text.split())
         cc2_text = 'This file is licensed under the Creative Commons'
+        attribution_text = 'The copyright holder of this file allows anyone to use it for any purpose, provided that the copyright holder is properly attributed.'
         if cc2_text in full_license:
             short_license = full_license[full_license.find(cc2_text):full_license.find('license.') + 8]
+        elif attribution_text in full_license:
+            short_license = attribution_text
         else:
+            print(full_license)
             short_license = False
         return short_license, full_license
 
     # parse common layouts for Public Domain
     elif page.find('table', class_='layouttemplate mw-content-ltr'):
         full_license = combine_ResultsSet(page.find_all('table', class_='layouttemplate mw-content-ltr'))
-        public_domain_text = 'This work is in the public domain in the United States'
-        public_domain_text_2 = 'This work has been released into the public domain'
+        public_domain_text = ['This work is in the public domain in the United States',
+                              'This work has been released into the public domain',
+                              'I, the copyright holder of this work, release this work into the public domain']
         federal_govt_text = 'a work of the U.S. federal government'
-        if public_domain_text in full_license:
-            short_license = public_domain_text
-        elif public_domain_text_2 in full_license:
+        if any(text in full_license for text in public_domain_text):
             short_license = public_domain_text
         elif federal_govt_text in full_license:
             short_license = public_domain_text
@@ -77,9 +80,10 @@ def get_license_table(page):
             short_license = False
         return short_license, full_license
 
-    # If the patten isn't matched by any of these, return placeholders
+    # If the patten isn't matched by any of these, return placeholders.  These should trigger an error up the line
     else:
-        return '', ''
+        "Failed to find license"
+        return False, False
 
 
 def get_image_and_info(href, folder_name):
@@ -102,6 +106,7 @@ def get_image_and_info(href, folder_name):
     short_license, full_license = get_license_table(page)
 
     if not short_license:
+        print('Failed to find license.')
         print(href)
         exit()
 
