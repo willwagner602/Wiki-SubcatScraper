@@ -8,6 +8,7 @@ import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 import os
 import urllib.request
+import socket
 
 logging.basicConfig(filename='PlaneScraper.log', level=logging.DEBUG)
 
@@ -31,12 +32,6 @@ def combine_ResultsSet(ResultsSet):
     for entry in ResultsSet:
         text += entry.text
     return text
-
-
-class LicenseError(AttributeError):
-    """
-    Raised when license code cannot find correct text to classify license
-    """
 
 
 def get_license_table(page):
@@ -64,7 +59,8 @@ def get_license_table(page):
     elif page.find_all('table', class_='layouttemplate licensetpl mw-content-ltr'):
         full_license = ' '.join(page.find('table', class_='layouttemplate licensetpl mw-content-ltr').text.split())
         cc2_text = 'This file is licensed under the Creative Commons'
-        attribution_text = 'The copyright holder of this file allows anyone to use it for any purpose, provided that the copyright holder is properly attributed.'
+        attribution_text = 'The copyright holder of this file allows anyone to use it for any purpose,' +\
+                           'provided that the copyright holder is properly attributed.'
         if cc2_text in full_license:
             short_license = full_license[full_license.find(cc2_text):full_license.find('license.') + 8]
         elif attribution_text in full_license:
@@ -77,7 +73,8 @@ def get_license_table(page):
 
     # parse common layouts for Public Domain
     elif page.find('table', class_='layouttemplate mw-content-ltr'):
-        full_license = combine_ResultsSet(page.find_all('table', class_='layouttemplate mw-content-ltr'))
+        full_license = ' '.join(combine_ResultsSet(page.find_all('table',
+                                                                 class_='layouttemplate mw-content-ltr')).split())
         public_domain_text = ['This work is in the public domain in the United States',
                               'This work has been released into the public domain',
                               'I, the copyright holder of this work, release this work into the public domain']
@@ -98,14 +95,34 @@ def get_license_table(page):
         return False, False
 
 
-def download_image(location, file_name, url):
+def download_image(location, file_name, url, timeout=10):
+
+    socket.setdefaulttimeout(timeout)
+
     os.chdir(image_directory)
     try:
         os.chdir(location)
     except FileNotFoundError:
         os.mkdir(location)
         os.chdir(location)
-    urllib.request.urlretrieve(url, file_name)
+    try:
+        urllib.request.urlretrieve(url, file_name)
+    except (urllib.error.URLError, socket.timeout):
+        logging.debug("Failed to download picture: " + url)
+
+def find_extension(file_name, extension_buffer=''):
+    while file_name[-1] != '.':
+        return find_extension(file_name[:-1], extension_buffer = file_name[-1] + extension_buffer)
+    return '.' + extension_buffer
+
+def generate_local_file_name(remote_file_name):
+    # if name length isn't an issue, just return the whole file name
+    if len(remote_file_name) < 50:
+        return remote_file_name
+    else:
+        # truncate file name and return with correct file extension
+        extension = find_extension(remote_file_name)
+        return remote_file_name[:50 - len(extension)] + extension
 
 def get_image_and_info(image_page, folder_name):
     page = get_page(image_page)
@@ -118,13 +135,13 @@ def get_image_and_info(image_page, folder_name):
             author = page.find('td', id='fileinfotpl_aut').text
         except AttributeError:
             author = "Author not found"
-    name = image_page[image_page.find('File:') + 5:260]
+    name = generate_local_file_name(image_page[image_page.find('File:') + 5:])
     image_url = page.find('div', class_='fullImageLink').contents[0]['href']
     image_page = image_page
     short_license, full_license = get_license_table(page)
 
     if not short_license:
-        new_image = Image(image_page, image_url, name, 'License not found', full_license, location, author)
+        new_image = Image(image_page, image_url, name, 'License not found', full_license, folder_name, author)
     else:
         new_image = Image(image_page, image_url, name, short_license, full_license, folder_name, author)
 
@@ -151,7 +168,6 @@ def find_subcategories(href, depth=0, folder_name='', subcat_name=2,):
         title = page.find('title').text
         title = title[title.find(':') + 1: title.find(' -')].replace(' ', '_')
         folder_name = title
-        print("Make folder:", title)
     for link in page.find_all('a', class_=link_class):
         subcategories.append(wikipedia_base + link['href'])
     if subcategories:
