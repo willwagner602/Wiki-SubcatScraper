@@ -17,8 +17,11 @@ class Image(Base):
     license_text = Column(String(1000))
     location = Column(String(200))
     author = Column(String(100))
+    aircraft = Column(String(100))
+    aircraft_type = Column(String(50))
 
-    def __init__(self, image_page, image_url, name, image_license, license_text, location, author):
+    def __init__(self, image_page, image_url, name, image_license, license_text, location, author,
+                 aircraft, aircraft_type):
         self.image_page = image_page
         self.image_url = image_url
         self.name = name
@@ -26,6 +29,8 @@ class Image(Base):
         self.license_text = license_text
         self.location = location
         self.author = author
+        self.aircraft = aircraft
+        self.aircraft_type = aircraft_type
 
     def __repr__(self):
         return "<Image(url='{}', name='{}', license='{}', location='{}', author='{}'".format(

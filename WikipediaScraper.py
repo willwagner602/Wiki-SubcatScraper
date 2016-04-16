@@ -24,7 +24,8 @@ image_directory = 'A:\Projects\PycharmProjects\PlaneScraper\images'
 
 def get_page(page):
     """
-    A simple wrapper around the BeautifulSoup.get function.
+    A simple wrapper around the BeautifulSoup.get function, which automatically handles being timed out by
+    the requested site.
     :param page:
     :return HTML document:
     """
@@ -36,6 +37,11 @@ def get_page(page):
 
 
 def combine_ResultsSet(ResultsSet):
+    """
+    Combines ResultSet into string for easier processing.
+    :param ResultsSet:
+    :return string:
+    """
     text = ''
     for entry in ResultsSet:
         text += entry.text
@@ -43,32 +49,42 @@ def combine_ResultsSet(ResultsSet):
 
 
 def get_license_table(page):
+    """
+    Finds the license text on a wikipedia page, if possible
+    :param page: HTML document
+    :return: license text, or false if it can't be found
+    """
+
+    full_license = None
+    short_license = None
 
     # parse common layout for Creative Commons 3
     if page.find('table', class_='licensetpl_wrapper'):
+
         license_text = page.find('table', class_='licensetpl_wrapper').contents
+
         # get license type and details
         for license_line in license_text:
             if license_line.name == 'tr':
                 full_license = ' '.join(license_line.text.split())
                 short_license = full_license[full_license.find('licensed under the') + 19:]
                 short_license = short_license[:short_license.find(".")]
-                return short_license, full_license
-        return False, False
 
     # parse common layout for GNU license
     elif page.find('table', class_='layouttemplate licensetpl'):
+
         full_license = combine_ResultsSet(page.find_all('table', class_='layouttemplate licensetpl'))
         short_license = full_license[full_license.find('terms of the') + 13:]
         short_license = short_license[:short_license.find(' only as')]
-        return short_license, full_license
 
     #parse common layout for Creative Commons 2
     elif page.find_all('table', class_='layouttemplate licensetpl mw-content-ltr'):
+
         full_license = ' '.join(page.find('table', class_='layouttemplate licensetpl mw-content-ltr').text.split())
         cc2_text = 'This file is licensed under the Creative Commons'
         attribution_text = 'The copyright holder of this file allows anyone to use it for any purpose,' +\
                            'provided that the copyright holder is properly attributed.'
+
         if cc2_text in full_license:
             short_license = full_license[full_license.find(cc2_text):full_license.find('license.') + 8]
         elif attribution_text in full_license:
@@ -76,17 +92,17 @@ def get_license_table(page):
         else:
             logging.debug('No license found in Creative Commons 2 format')
             logging.debug(full_license)
-            short_license = False
-        return short_license, full_license
 
     # parse common layouts for Public Domain
     elif page.find('table', class_='layouttemplate mw-content-ltr'):
+
         full_license = ' '.join(combine_ResultsSet(page.find_all('table',
                                                                  class_='layouttemplate mw-content-ltr')).split())
         public_domain_text = ['This work is in the public domain in the United States',
                               'This work has been released into the public domain',
                               'I, the copyright holder of this work, release this work into the public domain']
         federal_govt_text = 'a work of the U.S. federal government'
+
         if any(text in full_license for text in public_domain_text):
             short_license = 'Public Domain'
         elif federal_govt_text in full_license:
@@ -94,20 +110,24 @@ def get_license_table(page):
         else:
             logging.debug('No license found in Public Domain format')
             logging.debug(full_license)
-            short_license = False
-        return short_license, full_license
 
     # If the pattern isn't matched by any of these, return placeholders.  These should trigger an error up the line
     else:
         print("Failed to find license")
-        return False, False
+
+    return short_license, full_license
 
 
 def download_image(location, file_name, url, timeout=1):
+    """
+    :param location: filepath string
+    :param file_name: string
+    :param url: string
+    :param timeout: time in seconds
+    """
 
     socket.setdefaulttimeout(timeout)
 
-    os.chdir(image_directory)
     try:
         os.chdir(location)
     except FileNotFoundError:
@@ -251,14 +271,21 @@ def count_categories(href, depth=0, folder_name='', subcat_name=1, counts=None):
         print(subcategory_counts[folder_name])
 
 
-def download_subcategories(href, picture_counts=None, depth=0, folder_name='', subcategory_name=1, image_limit=sys.maxsize,
-                           completed_folders=None, overflow_folders=None):
+def download_subcategories(href, picture_counts=None, depth=0, folder_name='', subcategory_name=1,
+                           image_limit=sys.maxsize, completed_folders=None, overflow_folders=None):
     """
     Recursively finds subcategory page links, stopping when reaching a final image.  Takes a specific level of subcat
     to use for folder naming on local drive.
     :param href:
-    :return dictionary of folder names and pictures downloaded, list of folder names that have pictures over
-    specified limit:
+    :param picture_counts:
+    :param depth:
+    :param folder-name:
+    :param subcategory_name:
+    :param image_limit:
+    :param completed_folders:
+    :param overflow_folders:
+    :return: dictionary of folder names and pictures downloaded, list of folder names that have pictures over
+    specified limit
     """
 
     if picture_counts is None:
@@ -295,9 +322,8 @@ def download_subcategories(href, picture_counts=None, depth=0, folder_name='', s
     for link in page.find_all('a', class_=link_class):
         subcategories.append(wikipedia_base + link['href'])
 
-    # 2 options - either we want to skip this because we already have enough, or get the image and info
-    # for folders not yet added to picture_counts, or who we have collected fewer than the limit, collect them
-    # as long as we aren't explicitly told to skip them
+    # 2 options - either we want to skip this because we already have enough, or if we have collected fewer than the
+    # limit, collect them as long as we aren't explicitly told to skip them
     if (not picture_counts or picture_counts[folder_name] < image_limit) and folder_name not in completed_folders:
         # if there are subcategories, recursively analyze them
         if subcategories:
@@ -318,7 +344,7 @@ def download_subcategories(href, picture_counts=None, depth=0, folder_name='', s
 
                     # if this particular image hasn't been downloaded yet, get it's info and
                     # add it to the count downloaded for this folder
-                    link_url = wikipedia_base + link['href']
+                    link_url = wikipedia_base + link['hrcef']
                     if link_url not in already_downloaded_images:
                         get_image_and_info(link_url, folder_name)
                         picture_counts[folder_name] += 1
@@ -330,7 +356,7 @@ def download_subcategories(href, picture_counts=None, depth=0, folder_name='', s
 if __name__ == '__main__':
 
     # setup SQL alchemy connection
-    engine = sqlalchemy.create_engine('sqlite:///' + os.getcwd() + '\\images.db')
+    engine = sqlalchemy.create_engine('sqlite:///' + os.getcwd() + '\\images.sqlite3')
     Session = sessionmaker(bind=engine)
     session = Session()
 
