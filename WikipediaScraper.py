@@ -118,6 +118,12 @@ def get_license_table(page):
     return short_license, full_license
 
 
+def separate_directory_path(full_path):
+    path = full_path[:full_path.rfind('/')]
+    directory = full_path[full_path.rfind('/') + 1:]
+    return path, directory
+
+
 def download_image(location, file_name, url, timeout=1):
     """
     :param location: filepath string
@@ -128,20 +134,28 @@ def download_image(location, file_name, url, timeout=1):
 
     socket.setdefaulttimeout(timeout)
 
+    path, directory = separate_directory_path(location)
+    current_dir = os.getcwd()
+    print(path, directory)
     try:
         os.chdir(location)
     except FileNotFoundError:
-        os.mkdir(location)
-        os.chdir(location)
+        os.chdir(path)
+        os.mkdir(directory)
+        os.chdir(directory)
     try:
-        urllib.request.urlretrieve(url, file_name)
+        return urllib.request.urlretrieve(url, file_name)
     except (urllib.error.URLError, socket.timeout):
         logging.debug("Failed to download picture: " + url)
 
+
 def find_extension(file_name, extension_buffer=''):
+    # ToDo: test to confirm rfind
+    # return file_name[file_name.rfind('.') + 1:]
     while file_name[-1] != '.':
-        return find_extension(file_name[:-1], extension_buffer = file_name[-1] + extension_buffer)
+        return find_extension(file_name[:-1], extension_buffer=file_name[-1] + extension_buffer)
     return '.' + extension_buffer
+
 
 def generate_local_file_name(remote_file_name):
     # if name length isn't an issue, just return the whole file name
